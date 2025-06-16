@@ -1,0 +1,140 @@
+name: DevSecOps Full Pipeline
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  devsecops:
+    runs-on: ubuntu-latest
+    steps:
+
+      # Stage 1 & 2: Trigger + Load
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm install
+
+      # Stage 3: Security Tools
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        with:
+          args: detect --source=. --verbose
+
+      - name: Install Trivy
+        run: |
+          sudo apt-get install wget -y
+          wget https://github.com/aquasecurity/trivy/releases/download/v0.63.0/trivy_0.63.0_Linux-64bit.deb
+          sudo dpkg -i trivy_0.63.0_Linux-64bit.deb
+
+      - name: Trivy FS Scan
+        run: |
+          trivy fs . \
+            --exit-code 1 \
+            --severity CRITICAL,HIGH \
+            --skip-files "**/.next/**" \
+            --skip-dirs "node_modules"
+
+      # Stage 4: Quality Gate #1
+      # (Implicitly handled by exit-code 1 above)
+
+      # Stage 5: Build Docker Image
+      - name: Build Docker Image
+        run: docker build -t my-nextjs-app:latest .
+
+      # Stage 6: Scan Image
+      - name: Trivy Image Scan
+        run: trivy image --scanners vuln --quiet --ignore-unfixed --exit-code 1 --severity CRITICAL my-nextjs-app:latest
+
+      # Stage 7: Quality Gate #2
+      # (Also handled via exit-code)
+
+      # Stage 8: Authenticate to Google Cloud (Moved up for pushing image)
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+    # Configure Docker to use gcloud credentials
+      - name: Configure Docker for GCR/Artifact Registry
+        run: |
+          gcloud auth configure-docker us-docker.pkg.dev,gcr.io --quiet
+
+      # Stage 9: Push to GCP (Moved before signing)
+      - name: Push Docker Image to GCR
+        env:
+            PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+            docker tag my-nextjs-app:latest gcr.io/$PROJECT_ID/my-nextjs-app:latest
+            docker push gcr.io/$PROJECT_ID/my-nextjs-app:latest
+
+      # Stage 10: Sign Image (Moved after push)
+      - name: Configure Cosign for GCR
+        run: |
+          gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://gcr.io
+
+      - name: Set up Cosign
+        run: |
+          curl -LO https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64
+          chmod +x cosign-linux-amd64
+          sudo mv cosign-linux-amd64 /usr/local/bin/cosign
+
+
+      - name: Sign Docker Image
+        env:
+                COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+                COSIGN_YES: true
+        run: |
+                # Get the image digest from GCR
+                IMAGE_DIGEST=$(gcloud container images describe gcr.io/${{ secrets.GCP_PROJECT_ID }}/my-nextjs-app:latest --format='value(image_summary.digest)')
+                
+                # Save the private key
+                echo "${{ secrets.COSIGN_PRIVATE_KEY }}" > cosign.key
+                
+                # Sign the image using the digest
+                cosign sign --key cosign.key gcr.io/${{ secrets.GCP_PROJECT_ID }}/my-nextjs-app@${IMAGE_DIGEST}
+
+
+      # Stage 11: Infrastructure Scan
+      - name: Wait for Cloud Run to be ready
+        run: sleep 30
+
+      - name: Nmap Scan on Cloud Run
+        run: |
+            sudo apt-get install nmap -y
+            nmap -Pn ${{ secrets.CLOUD_RUN_URL }}
+
+      # Stage 12: Final Quality Gate
+      - name: Verify Cosign Signature
+        env:
+          COSIGN_YES: true
+        run: |
+          # Save the public key
+          echo "${{ secrets.COSIGN_PUBLIC_KEY }}" > cosign.pub
+          
+          # Get the image digest from GCR
+          IMAGE_DIGEST=$(gcloud container images describe gcr.io/${{ secrets.GCP_PROJECT_ID }}/my-nextjs-app:latest --format='value(image_summary.digest)')
+          
+          # Verify the signature
+          cosign verify --key cosign.pub --insecure-ignore-tlog=true gcr.io/${{ secrets.GCP_PROJECT_ID }}/my-nextjs-app@${IMAGE_DIGEST}
+      # Stage 13: Deploy to Cloud Run
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy my-nextjs-app \
+            --image=gcr.io/${{ secrets.GCP_PROJECT_ID }}/my-nextjs-app:latest \
+            --platform=managed \
+            --region=${{ secrets.GCP_REGION }} \
+            --allow-unauthenticated
