@@ -18,7 +18,7 @@ const Skills = () => {
     {
       category: "Programming Languages",
       icon: <Code className="w-6 h-6" />,
-      skills: ["C", "Java", "Python", "JavaScript", "Kotlin", "PHP"],
+      skills: ["C", "Java", "Python", "JavaScript", "PHP"],
       color: "from-rose-500 to-pink-500",
       bgColor: "bg-rose-50",
       textColor: "text-rose-600",
@@ -27,7 +27,7 @@ const Skills = () => {
     {
       category: "Frontend",
       icon: <Layout className="w-6 h-6" />,
-      skills: ["HTML", "CSS", "React", "NextJS", "Tailwind", "Redux"],
+      skills: ["HTML", "CSS", "React", "NextJS", "Tailwind"],
       color: "from-blue-500 to-cyan-500",
       bgColor: "bg-blue-50",
       textColor: "text-blue-600",
@@ -45,7 +45,7 @@ const Skills = () => {
     {
       category: "Backend",
       icon: <Server className="w-6 h-6" />,
-      skills: ["Spring Boot", ".NET", "Django", "Flask", "Node.js"],
+      skills: ["Spring Boot", "ExpressJS", "Flask", "Node.js"],
       color: "from-emerald-500 to-teal-500",
       bgColor: "bg-emerald-50",
       textColor: "text-emerald-600",
@@ -54,7 +54,7 @@ const Skills = () => {
     {
       category: "Databases",
       icon: <Database className="w-6 h-6" />,
-      skills: ["MySQL", "SQL Server", "NoSQL", "MongoDB", "PostgreSQL"],
+      skills: ["MySQL", "SQL Server", "MongoDB", "PostgreSQL"],
       color: "from-amber-500 to-orange-500",
       bgColor: "bg-amber-50",
       textColor: "text-amber-600",
@@ -63,7 +63,7 @@ const Skills = () => {
     {
       category: "Data Tools",
       icon: <BarChart2 className="w-6 h-6" />,
-      skills: ["Power BI", "Talend", "SSIS", "SSRS", "SSAS"],
+      skills: ["Power BI", "Talend"],
       color: "from-indigo-500 to-blue-500",
       bgColor: "bg-indigo-50",
       textColor: "text-indigo-600",
@@ -72,7 +72,7 @@ const Skills = () => {
     {
       category: "DevOps",
       icon: <Cloud className="w-6 h-6" />,
-      skills: ["Docker", "AWS", "CI/CD", "Kubernetes"],
+      skills: ["Docker", "AWS", "GCP", "CI/CD"],
       color: "from-sky-500 to-cyan-500",
       bgColor: "bg-sky-50",
       textColor: "text-sky-600",
